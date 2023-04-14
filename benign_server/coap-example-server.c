@@ -42,8 +42,6 @@
 #include "contiki.h"
 #include "coap-engine.h"
 
-#include "coap-blocking-api.h"
-
 #if PLATFORM_SUPPORTS_BUTTON_HAL
 #include "dev/button-hal.h"
 #else
@@ -58,63 +56,9 @@
  * Resources to be activated need to be imported through the extern keyword.
  * The build system automatically compiles the resources in the corresponding sub-directory.
  */
-extern coap_resource_t res_mitm;
-
+extern coap_resource_t res_lock;
 
 PROCESS(er_example_server, "Erbium Example Server");
-
-
-
-#define SERVER_EP "coap://[fd00::1]"      // Real server address
-static coap_endpoint_t server_ep;
-static coap_message_t* expected_response;
-
-#define SEND_DATA() { \
-  static coap_message_t request[1]; \
-  coap_init_message(request, COAP_TYPE_CON, COAP_GET, 0); \
-  coap_set_header_uri_path(request, "test"); \
-  const char msg[] = "Toggle!"; \
-  coap_set_payload(request, (uint8_t *)msg, sizeof(msg) - 1); \
-  response_handler(expected_response); \
-  /*COAP_BLOCKING_REQUEST(&server_ep, request, response_handler);*/ \
-}
-
-void
-response_handler(coap_message_t *response)
-{
-  puts("Got response");
-}
-
-
-PROCESS(send_request_main, "TBA2");
-PROCESS_THREAD(send_request_main, ev, data)
-{
-  PROCESS_BEGIN();
-  puts("Processing request (main)");
-  
-  //coap_message_t *request = (coap_message_t*)data;
-  
-  SEND_DATA();
-  
-  puts("Finished processing request (main)");
-  
-  //process_poll((struct process*)data);
-  
-  PROCESS_END();
-}
-
-
-
-PROCESS(input_ctl, "Input control to launch attack steps");
-PROCESS_THREAD(input_ctl, ev, data)
-{
-  PROCESS_BEGIN();
-  
-  
-  
-  PROCESS_END();
-}
-
 AUTOSTART_PROCESSES(&er_example_server);
 
 PROCESS_THREAD(er_example_server, ev, data)
@@ -130,28 +74,12 @@ PROCESS_THREAD(er_example_server, ev, data)
    * WARNING: Activating twice only means alternate path, not two instances!
    * All static variables are the same for each URI path.
    */
-   coap_activate_resource(&res_mitm, "test");
+  coap_activate_resource(&res_lock, "test");
 
-  coap_endpoint_parse(SERVER_EP, strlen(SERVER_EP), &server_ep);
-  
   /* Define application-specific events here. */
-  expected_response = NULL;
-  //SEND_DATA();
-#if 0
   while(1) {
     PROCESS_WAIT_EVENT();
-
-      /* Call the event_handler for this application-specific event. */
-      puts("Got request at main");
-      //process_start(&send_request_main, PROCESS_CURRENT());
-      //PROCESS_YIELD();
-      //while (process_is_running(&send_request_main)) {}
-      puts("Finished preprocessing");
-      //res_mitm.trigger();
-
-      /* Also call the separate response example handler. */
-      //res_separate.resume();
   }                             /* while (1) */
-#endif
+
   PROCESS_END();
 }

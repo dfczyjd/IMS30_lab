@@ -39,8 +39,11 @@
 #include <stdlib.h>
 #include <string.h>
 #include "coap-engine.h"
+#include "coap-log.h"
+#define LOG_MODULE "App"
+#define LOG_LEVEL  LOG_LEVEL_APP
 
-static void res_get_handler(coap_message_t *request, coap_message_t *response, uint8_t *buffer, uint16_t preferred_size, int32_t *offset);
+static void res_post_handler(coap_message_t *request, coap_message_t *response, uint8_t *buffer, uint16_t preferred_size, int32_t *offset);
 
 /*
  * A handler function named [resource name]_handler must be implemented for each RESOURCE.
@@ -48,36 +51,58 @@ static void res_get_handler(coap_message_t *request, coap_message_t *response, u
  * preferred_size and offset, but must respect the REST_MAX_CHUNK_SIZE limit for the buffer.
  * If a smaller block size is requested for CoAP, the REST framework automatically splits the data.
  */
-RESOURCE(res_hello,
+RESOURCE(res_lock,
          "title=\"Hello world: ?len=0..\";rt=\"Text\"",
-         res_get_handler,
          NULL,
+         res_post_handler,
          NULL,
          NULL);
 
-static void
-res_get_handler(coap_message_t *request, coap_message_t *response, uint8_t *buffer, uint16_t preferred_size, int32_t *offset)
-{
-  const char *len = NULL;
-  /* Some data that has the length up to REST_MAX_CHUNK_SIZE. For more, see the chunk resource. */
-  char const *const message = "Hello World! ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxy";
-  int length = 12; /*           |<-------->| */
+static bool lock_is_open = false;
 
-  /* The query string can be retrieved by rest_get_query() or parsed for its key-value pairs. */
-  if(coap_get_query_variable(request, "len", &len)) {
-    length = atoi(len);
-    if(length < 0) {
-      length = 0;
+static void
+res_post_handler(coap_message_t *request, coap_message_t *response, uint8_t *buffer, uint16_t preferred_size, int32_t *offset)
+{
+  const uint8_t *u_payload;
+  coap_get_payload(request, &u_payload);
+  const char *payload = (char*)u_payload;
+  int length = 0;
+  if (!strcmp(payload, "open"))
+  {
+    if (lock_is_open)
+    {
+      length = 17;
+      memcpy(buffer, "Lock already open", length);
     }
-    if(length > REST_MAX_CHUNK_SIZE) {
-      length = REST_MAX_CHUNK_SIZE;
+    else
+    {
+      length = 16;
+      memcpy(buffer, "Lock is now open", length);
+      lock_is_open = true;
     }
-    memcpy(buffer, message, length);
-  } else {
-    memcpy(buffer, message, length);
+  }
+  else if (!strcmp(payload, "close"))
+  {
+    if (lock_is_open)
+    {
+      length = 18;
+      memcpy(buffer, "Lock is now closed", length);
+      lock_is_open = false;
+    }
+    else
+    {
+      length = 19;
+      memcpy(buffer, "Lock already closed", length);
+    }
+  }
+  else
+  {
+    length = 15;
+    LOG_INFO("Got invalid option \"%s\"\n", payload);
+    memcpy(buffer, "Invalid request", length);
   }
 
-  coap_set_header_content_format(response, TEXT_PLAIN); /* text/plain is the default, hence this option could be omitted. */
+  coap_set_header_content_format(response, TEXT_PLAIN);
   coap_set_header_etag(response, (uint8_t *)&length, 1);
   coap_set_payload(response, buffer, length);
 }
